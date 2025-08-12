@@ -1,0 +1,122 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary technical palette */
+    --background: 220 15% 6%;
+    --foreground: 210 40% 98%;
+
+    /* Card system */
+    --card: 220 15% 8%;
+    --card-foreground: 210 40% 98%;
+
+    /* Interactive elements */
+    --primary: 142 86% 28%;
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 220 15% 12%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Accents for visualization */
+    --accent: 217 91% 60%;
+    --accent-foreground: 220 15% 6%;
+    
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 20% 65%;
+
+    /* Status colors for tasks */
+    --task-idle: 220 15% 20%;
+    --task-running: 142 86% 28%;
+    --task-completed: 217 91% 60%;
+    --task-pending: 38 92% 50%;
+
+    /* Borders and inputs */
+    --border: 220 15% 20%;
+    --input: 220 15% 12%;
+    --ring: 142 86% 28%;
+
+    /* Performance gradient */
+    --perf-gradient-start: 142 86% 28%;
+    --perf-gradient-end: 217 91% 60%;
+
+    --radius: 0.75rem;
+
+    /* Animation variables */
+    --matrix-cell-size: 40px;
+    --animation-duration: 2s;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-mono;
+    background-image: 
+      radial-gradient(circle at 25% 25%, hsl(142 86% 28% / 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 75% 75%, hsl(217 91% 60% / 0.1) 0%, transparent 50%);
+  }
+
+  /* Matrix visualization styles */
+  .matrix-cell {
+    @apply w-10 h-10 border border-border flex items-center justify-center text-xs font-bold rounded transition-all duration-300;
+    background: hsl(var(--task-idle));
+  }
+
+  .matrix-cell.task-running {
+    background: hsl(var(--task-running));
+    box-shadow: 0 0 20px hsl(var(--task-running) / 0.5);
+    transform: scale(1.05);
+  }
+
+  .matrix-cell.task-completed {
+    background: hsl(var(--task-completed));
+    box-shadow: 0 0 15px hsl(var(--task-completed) / 0.3);
+  }
+
+  .matrix-cell.task-pending {
+    background: hsl(var(--task-pending));
+    box-shadow: 0 0 10px hsl(var(--task-pending) / 0.3);
+  }
+
+  /* Performance chart styles */
+  .performance-bar {
+    background: linear-gradient(90deg, 
+      hsl(var(--perf-gradient-start)) 0%, 
+      hsl(var(--perf-gradient-end)) 100%);
+    transition: width 0.5s ease-out;
+  }
+
+  /* Code syntax highlighting */
+  .code-block {
+    @apply bg-secondary rounded-lg p-4 font-mono text-sm overflow-x-auto;
+  }
+
+  .keyword { @apply text-accent font-bold; }
+  .comment { @apply text-muted-foreground italic; }
+  .directive { @apply text-primary; }
+  .variable { @apply text-foreground; }
+
+  /* Animations */
+  @keyframes task-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); box-shadow: 0 0 25px hsl(var(--task-running) / 0.7); }
+  }
+
+  .task-animate {
+    animation: task-pulse var(--animation-duration) ease-in-out infinite;
+  }
+
+  @keyframes data-flow {
+    0% { transform: translateX(-100%); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateX(100%); opacity: 0; }
+  }
+
+  .data-flow {
+    animation: data-flow 1.5s ease-in-out;
+  }
+}
