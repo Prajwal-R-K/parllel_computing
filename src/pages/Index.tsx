@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +9,7 @@ import CodeExamples from '@/components/CodeExamples';
 import ConceptsExplainer from '@/components/ConceptsExplainer';
 import ParallelismFundamentals from '@/components/ParallelismFundamentals';
 import MatrixAdditionExamples from '@/components/MatrixAdditionExamples';
+import MatrixCodeAnalysis from '@/components/MatrixCodeAnalysis';
 import { Cpu, Code, BookOpen, Zap, GitCompare, Settings, Network, Grid } from 'lucide-react';
 
 const Index = () => {
@@ -112,6 +112,8 @@ const Index = () => {
                 <MatrixAdditionExamples />
               </CardContent>
             </Card>
+            
+            <MatrixCodeAnalysis />
           </TabsContent>
 
           <TabsContent value="comparison" className="space-y-6">

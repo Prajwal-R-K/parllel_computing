@@ -1,10 +1,14 @@
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import App from './App.tsx'
-import './index.css'
+// main.tsx
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App.tsx";
+import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
-  <BrowserRouter basename="/parllel_computing">
+  <BrowserRouter
+    basename="/parllel_computing"
+    future={{ v7_relativeSplatPath: true }}
+  >
     <App />
   </BrowserRouter>
-)
+);

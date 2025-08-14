@@ -1,462 +1,683 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Play, Pause, RotateCcw, Cpu, Grid, Code, BarChart } from 'lucide-react';
+import { Play, Square, RotateCcw, Clock, Cpu, Users, Zap, Grid, Layers } from 'lucide-react';
 
 interface MatrixCell {
   value: number;
-  status: 'idle' | 'processing' | 'completed';
-  taskId?: number;
+  status: 'idle' | 'assigned' | 'processing' | 'completed';
   threadId?: number;
+  taskId?: number;
+  sectionId?: number;
 }
 
-interface ExecutionStep {
-  type: string;
-  description: string;
-  activeThreads: number[];
-  processingCells: { row: number; col: number; threadId: number }[];
-  timestamp: number;
+interface ThreadInfo {
+  id: number;
+  status: 'idle' | 'working' | 'finished' | 'creating-tasks';
+  currentTask?: string;
+  tasksCompleted: number;
+  color: string;
+}
+
+interface TaskInfo {
+  id: number;
+  type: 'element' | 'row' | 'section';
+  position: string;
+  status: 'created' | 'assigned' | 'executing' | 'completed';
+  threadId?: number;
+  executionTime?: number;
 }
 
 const MatrixAdditionExamples: React.FC = () => {
-  const [matrixSize, setMatrixSize] = useState(6);
-  const [currentExample, setCurrentExample] = useState<'serial' | 'omp-for' | 'omp-tasks' | 'omp-sections'>('serial');
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
-  const [currentStep, setCurrentStep] = useState(0);
-  
+  const [matrixSize, setMatrixSize] = useState(4);
+  const [numThreads, setNumThreads] = useState(4);
   const [matrixA, setMatrixA] = useState<number[][]>([]);
   const [matrixB, setMatrixB] = useState<number[][]>([]);
   const [matrixC, setMatrixC] = useState<MatrixCell[][]>([]);
-  const [performance, setPerformance] = useState({ time: 0, efficiency: 0 });
+  const [isRunning, setIsRunning] = useState(false);
+  const [currentDemo, setCurrentDemo] = useState<'serial' | 'parallel-for' | 'sections' | 'element-task' | 'row-task' | null>(null);
+  const [threads, setThreads] = useState<ThreadInfo[]>([]);
+  const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const [executionLog, setExecutionLog] = useState<string[]>([]);
+  const [executionTime, setExecutionTime] = useState(0);
+  const [speed, setSpeed] = useState(1000);
 
-  const threadColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
+  const threadColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
+  // Initialize matrices and threads
   useEffect(() => {
-    initializeMatrices();
-  }, [matrixSize]);
+    initializeData();
+  }, [matrixSize, numThreads]);
 
-  const initializeMatrices = () => {
-    const createMatrix = (): number[][] => 
-      Array(matrixSize).fill(null).map(() => 
-        Array(matrixSize).fill(null).map(() => Math.floor(Math.random() * 10) + 1)
-      );
+  const initializeData = () => {
+    // Initialize matrices
+    const newMatrixA = Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => Math.floor(Math.random() * 9) + 1)
+    );
+    const newMatrixB = Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => Math.floor(Math.random() * 9) + 1)
+    );
+    const newMatrixC = Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: undefined,
+        taskId: undefined
+      }))
+    );
 
-    const createResultMatrix = (): MatrixCell[][] =>
-      Array(matrixSize).fill(null).map(() =>
-        Array(matrixSize).fill(null).map(() => ({
-          value: 0,
-          status: 'idle' as const
-        }))
-      );
+    setMatrixA(newMatrixA);
+    setMatrixB(newMatrixB);
+    setMatrixC(newMatrixC);
 
-    setMatrixA(createMatrix());
-    setMatrixB(createMatrix());
-    setMatrixC(createResultMatrix());
-    setExecutionSteps([]);
-    setCurrentStep(0);
+    // Initialize threads
+    const newThreads: ThreadInfo[] = Array(numThreads).fill(null).map((_, i) => ({
+      id: i,
+      status: 'idle',
+      tasksCompleted: 0,
+      color: threadColors[i % threadColors.length]
+    }));
+    setThreads(newThreads);
+
+    setTasks([]);
+    setExecutionLog([]);
+    setExecutionTime(0);
   };
 
-  const getCodeExample = (type: string) => {
-    const examples = {
-      serial: `// Serial Matrix Addition
-void matrix_add_serial(int A[N][N], int B[N][N], int C[N][N]) {
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            C[i][j] = A[i][j] + B[i][j];
-        }
-    }
-}`,
-      'omp-for': `// OpenMP Parallel For
-void matrix_add_parallel_for(int A[N][N], int B[N][N], int C[N][N]) {
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            C[i][j] = A[i][j] + B[i][j];
-        }
-    }
-}`,
-      'omp-tasks': `// OpenMP Tasks
-void matrix_add_tasks(int A[N][N], int B[N][N], int C[N][N]) {
-    #pragma omp parallel
-    {
-        #pragma omp single
-        {
-            for (int i = 0; i < N; i++) {
-                #pragma omp task firstprivate(i)
-                {
-                    for (int j = 0; j < N; j++) {
-                        C[i][j] = A[i][j] + B[i][j];
-                    }
-                }
-            }
-        }
-    }
-}`,
-      'omp-sections': `// OpenMP Sections
-void matrix_add_sections(int A[N][N], int B[N][N], int C[N][N]) {
-    #pragma omp parallel sections
-    {
-        #pragma omp section
-        {
-            // Process first quarter
-            for (int i = 0; i < N/2; i++)
-                for (int j = 0; j < N/2; j++)
-                    C[i][j] = A[i][j] + B[i][j];
-        }
-        #pragma omp section
-        {
-            // Process second quarter
-            for (int i = 0; i < N/2; i++)
-                for (int j = N/2; j < N; j++)
-                    C[i][j] = A[i][j] + B[i][j];
-        }
-        // ... more sections
-    }
-}`
-    };
-    return examples[type] || '';
+  const addLog = (message: string) => {
+    setExecutionLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   };
 
-  const runExample = async () => {
-    if (isRunning) return;
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const runSerialDemo = async () => {
     setIsRunning(true);
-    
+    setCurrentDemo('serial');
     const startTime = Date.now();
-    
-    switch (currentExample) {
-      case 'serial':
-        await runSerialExample();
-        break;
-      case 'omp-for':
-        await runParallelForExample();
-        break;
-      case 'omp-tasks':
-        await runTasksExample();
-        break;
-      case 'omp-sections':
-        await runSectionsExample();
-        break;
+    addLog('🚀 Starting Serial Matrix Addition');
+    addLog('📊 Processing elements sequentially, one by one');
+
+    // Reset matrix C
+    setMatrixC(Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: 0,
+        taskId: undefined
+      }))
+    ));
+
+    // Set up single thread
+    setThreads([{
+      id: 0,
+      status: 'working',
+      currentTask: 'Sequential Processing',
+      tasksCompleted: 0,
+      color: threadColors[0]
+    }]);
+
+    // Process elements sequentially
+    for (let i = 0; i < matrixSize; i++) {
+      for (let j = 0; j < matrixSize; j++) {
+        // Mark cell as processing
+        setMatrixC(prev => prev.map((row, rowIdx) =>
+          row.map((cell, colIdx) => 
+            rowIdx === i && colIdx === j 
+              ? { ...cell, status: 'processing', value: matrixA[i][j] + matrixB[i][j] }
+              : cell
+          )
+        ));
+
+        addLog(`⚡ Processing C[${i}][${j}] = ${matrixA[i][j]} + ${matrixB[i][j]} = ${matrixA[i][j] + matrixB[i][j]}`);
+        await delay(speed / 2);
+
+        // Mark as completed
+        setMatrixC(prev => prev.map((row, rowIdx) =>
+          row.map((cell, colIdx) => 
+            rowIdx === i && colIdx === j 
+              ? { ...cell, status: 'completed' }
+              : cell
+          )
+        ));
+        await delay(speed / 4);
+      }
     }
 
     const endTime = Date.now();
-    const executionTime = endTime - startTime;
-    const theoreticalSerial = matrixSize * matrixSize * 50; // Estimated serial time
-    const efficiency = Math.min(100, (theoreticalSerial / executionTime) * 100);
-    
-    setPerformance({ time: executionTime, efficiency });
+    setExecutionTime(endTime - startTime);
+    addLog(`🏁 Serial execution completed in ${endTime - startTime}ms`);
     setIsRunning(false);
+    setCurrentDemo(null);
   };
 
-  const runSerialExample = async () => {
-    const steps: ExecutionStep[] = [];
+  const runParallelForDemo = async () => {
+    setIsRunning(true);
+    setCurrentDemo('parallel-for');
+    const startTime = Date.now();
+    addLog('🚀 Starting Parallel For Loop (#pragma omp parallel for collapse(2))');
+    addLog(`📊 Distributing ${matrixSize * matrixSize} iterations across ${numThreads} threads`);
+
+    // Reset matrix C
+    setMatrixC(Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: undefined,
+        taskId: undefined
+      }))
+    ));
+
+    // Initialize threads
+    const newThreads: ThreadInfo[] = Array(numThreads).fill(null).map((_, i) => ({
+      id: i,
+      status: 'working',
+      tasksCompleted: 0,
+      color: threadColors[i % threadColors.length],
+      currentTask: 'Loop iterations'
+    }));
+    setThreads(newThreads);
+
+    // Static distribution of iterations
+    const totalIterations = matrixSize * matrixSize;
+    const iterationsPerThread = Math.ceil(totalIterations / numThreads);
     
+    addLog(`📋 Static distribution: ~${iterationsPerThread} iterations per thread`);
+
+    // Process iterations in parallel chunks
+    const allIterations: { i: number, j: number, threadId: number }[] = [];
+    let iterationCount = 0;
     for (let i = 0; i < matrixSize; i++) {
       for (let j = 0; j < matrixSize; j++) {
-        steps.push({
-          type: 'serial',
-          description: `Processing cell [${i}][${j}] sequentially`,
-          activeThreads: [1],
-          processingCells: [{ row: i, col: j, threadId: 1 }],
-          timestamp: Date.now()
-        });
-
-        setExecutionSteps(steps);
-        setCurrentStep(steps.length - 1);
-
-        setMatrixC(prev => prev.map((row, rowIdx) =>
-          row.map((cell, colIdx) => ({
-            ...cell,
-            status: rowIdx === i && colIdx === j ? 'processing' : 
-                   (rowIdx < i || (rowIdx === i && colIdx < j)) ? 'completed' : 'idle',
-            value: rowIdx === i && colIdx === j ? matrixA[i][j] + matrixB[i][j] : cell.value,
-            threadId: rowIdx === i && colIdx === j ? 1 : undefined
-          }))
-        ));
-
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        setMatrixC(prev => prev.map((row, rowIdx) =>
-          row.map((cell, colIdx) => ({
-            ...cell,
-            status: (rowIdx < i || (rowIdx === i && colIdx <= j)) ? 'completed' : 'idle'
-          }))
-        ));
-
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-    }
-  };
-
-  const runParallelForExample = async () => {
-    const steps: ExecutionStep[] = [];
-    const numThreads = 4;
-    const cellsPerThread = Math.ceil((matrixSize * matrixSize) / numThreads);
-
-    steps.push({
-      type: 'parallel-init',
-      description: 'Creating parallel region with OpenMP parallel for',
-      activeThreads: Array.from({ length: numThreads }, (_, i) => i + 1),
-      processingCells: [],
-      timestamp: Date.now()
-    });
-
-    setExecutionSteps(steps);
-    setCurrentStep(0);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const allCells = [];
-    for (let i = 0; i < matrixSize; i++) {
-      for (let j = 0; j < matrixSize; j++) {
-        allCells.push({ row: i, col: j });
+        const threadId = Math.floor(iterationCount / iterationsPerThread);
+        allIterations.push({ i, j, threadId: Math.min(threadId, numThreads - 1) });
+        iterationCount++;
       }
     }
 
-    // Distribute cells among threads
-    const threadWorkloads = Array.from({ length: numThreads }, () => []);
-    allCells.forEach((cell, index) => {
-      const threadId = index % numThreads;
-      threadWorkloads[threadId].push(cell);
+    // Group by thread for parallel execution
+    const threadWork: { [key: number]: { i: number, j: number }[] } = {};
+    allIterations.forEach(({ i, j, threadId }) => {
+      if (!threadWork[threadId]) threadWork[threadId] = [];
+      threadWork[threadId].push({ i, j });
     });
 
-    // Process in parallel waves
-    const maxCellsInWave = Math.max(...threadWorkloads.map(w => w.length));
-    
-    for (let wave = 0; wave < maxCellsInWave; wave++) {
-      const currentProcessing = [];
+    // Execute in parallel
+    const threadPromises = Object.entries(threadWork).map(async ([threadIdStr, work]) => {
+      const threadId = parseInt(threadIdStr);
+      for (const { i, j } of work) {
+        // Mark as assigned
+        setMatrixC(prev => prev.map((row, rowIdx) =>
+          row.map((cell, colIdx) => 
+            rowIdx === i && colIdx === j 
+              ? { ...cell, status: 'assigned', threadId }
+              : cell
+          )
+        ));
+        
+        await delay(speed / 8);
+        
+        // Process
+        setMatrixC(prev => prev.map((row, rowIdx) =>
+          row.map((cell, colIdx) => 
+            rowIdx === i && colIdx === j 
+              ? { ...cell, status: 'processing', value: matrixA[i][j] + matrixB[i][j] }
+              : cell
+          )
+        ));
+
+        addLog(`⚡ Thread ${threadId}: C[${i}][${j}] = ${matrixA[i][j]} + ${matrixB[i][j]} = ${matrixA[i][j] + matrixB[i][j]}`);
+        await delay(speed / 2);
+
+        // Complete
+        setMatrixC(prev => prev.map((row, rowIdx) =>
+          row.map((cell, colIdx) => 
+            rowIdx === i && colIdx === j 
+              ? { ...cell, status: 'completed' }
+              : cell
+          )
+        ));
+        
+        setThreads(prev => prev.map(t => 
+          t.id === threadId 
+            ? { ...t, tasksCompleted: t.tasksCompleted + 1 }
+            : t
+        ));
+      }
+    });
+
+    await Promise.all(threadPromises);
+
+    const endTime = Date.now();
+    setExecutionTime(endTime - startTime);
+    addLog(`🏁 Parallel for loop completed in ${endTime - startTime}ms`);
+    setIsRunning(false);
+    setCurrentDemo(null);
+  };
+
+  const runSectionsDemo = async () => {
+    setIsRunning(true);
+    setCurrentDemo('sections');
+    const startTime = Date.now();
+    addLog('🚀 Starting OpenMP Sections (#pragma omp parallel sections)');
+    addLog(`📊 Dividing matrix into ${numThreads} predefined sections`);
+
+    // Reset matrix C
+    setMatrixC(Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: undefined,
+        sectionId: undefined
+      }))
+    ));
+
+    // Initialize threads
+    const newThreads: ThreadInfo[] = Array(numThreads).fill(null).map((_, i) => ({
+      id: i,
+      status: 'working',
+      tasksCompleted: 0,
+      color: threadColors[i % threadColors.length],
+      currentTask: `Section ${i}`
+    }));
+    setThreads(newThreads);
+
+    // Define sections (quarters for 4 threads)
+    const sections = [
+      { id: 0, name: 'Top-Left', iStart: 0, iEnd: Math.ceil(matrixSize/2), jStart: 0, jEnd: Math.ceil(matrixSize/2) },
+      { id: 1, name: 'Top-Right', iStart: 0, iEnd: Math.ceil(matrixSize/2), jStart: Math.ceil(matrixSize/2), jEnd: matrixSize },
+      { id: 2, name: 'Bottom-Left', iStart: Math.ceil(matrixSize/2), iEnd: matrixSize, jStart: 0, jEnd: Math.ceil(matrixSize/2) },
+      { id: 3, name: 'Bottom-Right', iStart: Math.ceil(matrixSize/2), iEnd: matrixSize, jStart: Math.ceil(matrixSize/2), jEnd: matrixSize }
+    ].slice(0, numThreads);
+
+    addLog(`📋 Created ${sections.length} sections for parallel execution`);
+
+    // Execute sections in parallel
+    const sectionPromises = sections.map(async (section, threadId) => {
+      addLog(`🎯 Thread ${threadId} assigned to ${section.name} section`);
       
-      for (let threadId = 0; threadId < numThreads; threadId++) {
-        if (threadWorkloads[threadId][wave]) {
-          const { row, col } = threadWorkloads[threadId][wave];
-          currentProcessing.push({ row, col, threadId: threadId + 1 });
+      for (let i = section.iStart; i < section.iEnd; i++) {
+        for (let j = section.jStart; j < section.jEnd; j++) {
+          // Mark as assigned
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            row.map((cell, colIdx) => 
+              rowIdx === i && colIdx === j 
+                ? { ...cell, status: 'assigned', threadId, sectionId: section.id }
+                : cell
+            )
+          ));
+          
+          await delay(speed / 6);
+          
+          // Process
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            row.map((cell, colIdx) => 
+              rowIdx === i && colIdx === j 
+                ? { ...cell, status: 'processing', value: matrixA[i][j] + matrixB[i][j] }
+                : cell
+            )
+          ));
+
+          addLog(`⚡ Thread ${threadId} (${section.name}): C[${i}][${j}] = ${matrixA[i][j] + matrixB[i][j]}`);
+          await delay(speed / 2);
+
+          // Complete
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            row.map((cell, colIdx) => 
+              rowIdx === i && colIdx === j 
+                ? { ...cell, status: 'completed' }
+                : cell
+            )
+          ));
+          
+          setThreads(prev => prev.map(t => 
+            t.id === threadId 
+              ? { ...t, tasksCompleted: t.tasksCompleted + 1 }
+              : t
+          ));
         }
       }
+      addLog(`✅ Thread ${threadId} completed ${section.name} section`);
+    });
 
-      if (currentProcessing.length === 0) break;
+    await Promise.all(sectionPromises);
 
-      steps.push({
-        type: 'parallel-for',
-        description: `Wave ${wave + 1}: ${currentProcessing.length} threads processing simultaneously`,
-        activeThreads: currentProcessing.map(p => p.threadId),
-        processingCells: currentProcessing,
-        timestamp: Date.now()
-      });
-
-      setExecutionSteps(steps);
-      setCurrentStep(steps.length - 1);
-
-      setMatrixC(prev => prev.map((row, rowIdx) =>
-        row.map((cell, colIdx) => {
-          const processing = currentProcessing.find(p => p.row === rowIdx && p.col === colIdx);
-          if (processing) {
-            return {
-              ...cell,
-              status: 'processing',
-              value: matrixA[rowIdx][colIdx] + matrixB[rowIdx][colIdx],
-              threadId: processing.threadId
-            };
-          }
-          return cell;
-        })
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      setMatrixC(prev => prev.map((row, rowIdx) =>
-        row.map((cell, colIdx) => {
-          const processing = currentProcessing.find(p => p.row === rowIdx && p.col === colIdx);
-          return processing ? { ...cell, status: 'completed' } : cell;
-        })
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
+    const endTime = Date.now();
+    setExecutionTime(endTime - startTime);
+    addLog(`🏁 Sections-based parallelism completed in ${endTime - startTime}ms`);
+    setIsRunning(false);
+    setCurrentDemo(null);
   };
 
-  const runTasksExample = async () => {
-    const steps: ExecutionStep[] = [];
-    const numThreads = 4;
+  const runElementBasedDemo = async () => {
+    setIsRunning(true);
+    setCurrentDemo('element-task');
+    const startTime = Date.now();
+    addLog('🚀 Starting Element-based Task Parallelism');
+    addLog(`📊 Thread 0 will create ${matrixSize * matrixSize} tasks (one per element)`);
+    addLog('🏗️ #pragma omp single - Thread 0 creating all tasks...');
 
-    // Step 1: Create parallel region
-    steps.push({
-      type: 'task-init',
-      description: 'Creating parallel region and thread team',
-      activeThreads: Array.from({ length: numThreads }, (_, i) => i + 1),
-      processingCells: [],
-      timestamp: Date.now()
-    });
+    // Reset matrix C
+    setMatrixC(Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: undefined,
+        taskId: undefined
+      }))
+    ));
 
-    setExecutionSteps(steps);
-    setCurrentStep(0);
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Step 2: Single thread creates tasks
-    steps.push({
-      type: 'task-creation',
-      description: 'Single thread creating tasks (one per row)',
-      activeThreads: [1],
-      processingCells: [],
-      timestamp: Date.now()
-    });
-
-    setExecutionSteps(steps);
-    setCurrentStep(1);
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Step 3: Dynamic task execution
-    const tasks = Array.from({ length: matrixSize }, (_, i) => ({
-      rowIndex: i,
-      status: 'pending'
+    // Initialize threads - Thread 0 starts as task creator
+    const newThreads: ThreadInfo[] = Array(numThreads).fill(null).map((_, i) => ({
+      id: i,
+      status: i === 0 ? 'creating-tasks' : 'idle',
+      tasksCompleted: 0,
+      color: threadColors[i % threadColors.length],
+      currentTask: i === 0 ? 'Creating tasks' : undefined
     }));
+    setThreads(newThreads);
+
+    // Phase 1: Thread 0 creates all tasks
+    addLog('📝 Thread 0 in #pragma omp single region - creating task pool...');
+    const allTasks: TaskInfo[] = [];
+    let taskId = 0;
+    
+    for (let i = 0; i < matrixSize; i++) {
+      for (let j = 0; j < matrixSize; j++) {
+        allTasks.push({
+          id: taskId++,
+          type: 'element',
+          position: `C[${i}][${j}]`,
+          status: 'created',
+          executionTime: Math.random() * 200 + 100
+        });
+        
+        // Show task creation progress
+        if (taskId % Math.max(1, Math.floor(matrixSize * matrixSize / 5)) === 0) {
+          await delay(speed / 8);
+          addLog(`📋 Thread 0: Created ${taskId} tasks so far...`);
+        }
+      }
+    }
+    
+    setTasks(allTasks);
+    addLog(`✅ Thread 0: All ${allTasks.length} tasks created and added to shared task pool`);
+    addLog('🚦 Task creation complete - all threads now participate in task execution');
+
+    // Phase 2: All threads (including Thread 0) now execute tasks
+    setThreads(prev => prev.map(t => ({ ...t, status: 'idle', currentTask: undefined })));
+    await delay(speed / 2);
 
     let completedTasks = 0;
-    while (completedTasks < matrixSize) {
-      const availableThreads = Array.from({ length: numThreads }, (_, i) => i + 1);
-      const currentlyProcessing = [];
+    const availableThreads = [...Array(numThreads).keys()];
+    const runningTasks: { [key: number]: { taskIndex: number; startTime: number } } = {};
 
-      // Assign tasks to available threads
-      for (let threadId = 0; threadId < Math.min(numThreads, matrixSize - completedTasks); threadId++) {
-        const taskIndex = completedTasks + threadId;
-        if (taskIndex < matrixSize) {
-          currentlyProcessing.push({
-            threadId: threadId + 1,
-            rowIndex: taskIndex,
-            taskId: taskIndex + 1
-          });
+    while (completedTasks < allTasks.length) {
+      // Assign tasks to available threads (including Thread 0)
+      for (const threadId of availableThreads) {
+        if (!(threadId in runningTasks)) {
+          const nextTaskIndex = allTasks.findIndex(task => task.status === 'created');
+          if (nextTaskIndex !== -1) {
+            const task = allTasks[nextTaskIndex];
+            const [i, j] = task.position.match(/\d+/g)!.map(Number);
+            
+            task.status = 'assigned';
+            task.threadId = threadId;
+            runningTasks[threadId] = { taskIndex: nextTaskIndex, startTime: Date.now() };
+            
+            setThreads(prev => prev.map(t => 
+              t.id === threadId 
+                ? { ...t, status: 'working', currentTask: task.position }
+                : t
+            ));
+
+            setMatrixC(prev => prev.map((row, rowIdx) =>
+              row.map((cell, colIdx) => 
+                rowIdx === i && colIdx === j 
+                  ? { ...cell, status: 'assigned', threadId, taskId: task.id }
+                  : cell
+              )
+            ));
+
+            addLog(`🎯 Thread ${threadId} grabbed task ${task.position} from shared pool`);
+            setTasks([...allTasks]);
+          }
         }
       }
 
-      if (currentlyProcessing.length === 0) break;
+      await delay(speed / 4);
 
-      steps.push({
-        type: 'task-execution',
-        description: `Tasks running: ${currentlyProcessing.map(p => `Row ${p.rowIndex}`).join(', ')}`,
-        activeThreads: currentlyProcessing.map(p => p.threadId),
-        processingCells: currentlyProcessing.flatMap(p => 
-          Array.from({ length: matrixSize }, (_, j) => ({ 
-            row: p.rowIndex, 
-            col: j, 
-            threadId: p.threadId 
-          }))
-        ),
-        timestamp: Date.now()
-      });
+      // Process assigned tasks
+      for (const [threadId, taskInfo] of Object.entries(runningTasks)) {
+        const task = allTasks[taskInfo.taskIndex];
+        if (task.status === 'assigned') {
+          task.status = 'executing';
+          const [i, j] = task.position.match(/\d+/g)!.map(Number);
+          
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            row.map((cell, colIdx) => 
+              rowIdx === i && colIdx === j 
+                ? { ...cell, status: 'processing', value: matrixA[i][j] + matrixB[i][j] }
+                : cell
+            )
+          ));
+          
+          addLog(`⚡ Thread ${threadId} executing ${task.position}: ${matrixA[i][j]} + ${matrixB[i][j]} = ${matrixA[i][j] + matrixB[i][j]}`);
+        }
+      }
 
-      setExecutionSteps(steps);
-      setCurrentStep(steps.length - 1);
-
-      // Update matrix with processing status
-      setMatrixC(prev => prev.map((row, rowIdx) =>
-        row.map((cell, colIdx) => {
-          const processing = currentlyProcessing.find(p => p.rowIndex === rowIdx);
-          if (processing) {
-            return {
-              ...cell,
-              status: 'processing',
-              value: matrixA[rowIdx][colIdx] + matrixB[rowIdx][colIdx],
-              threadId: processing.threadId,
-              taskId: processing.taskId
-            };
-          }
-          return cell;
-        })
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await delay(speed);
 
       // Complete tasks
-      setMatrixC(prev => prev.map((row, rowIdx) =>
-        row.map((cell, colIdx) => {
-          const processing = currentlyProcessing.find(p => p.rowIndex === rowIdx);
-          return processing ? { ...cell, status: 'completed' } : cell;
-        })
-      ));
+      for (const [threadIdStr, taskInfo] of Object.entries(runningTasks)) {
+        const threadId = parseInt(threadIdStr);
+        if (Date.now() - taskInfo.startTime >= (allTasks[taskInfo.taskIndex].executionTime! * speed / 1000)) {
+          const task = allTasks[taskInfo.taskIndex];
+          const [i, j] = task.position.match(/\d+/g)!.map(Number);
+          
+          task.status = 'completed';
+          completedTasks++;
+          
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            row.map((cell, colIdx) => 
+              rowIdx === i && colIdx === j 
+                ? { ...cell, status: 'completed' }
+                : cell
+            )
+          ));
 
-      completedTasks += currentlyProcessing.length;
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-  };
+          setThreads(prev => prev.map(t => 
+            t.id === threadId 
+              ? { ...t, status: 'idle', currentTask: undefined, tasksCompleted: t.tasksCompleted + 1 }
+              : t
+          ));
 
-  const runSectionsExample = async () => {
-    const steps: ExecutionStep[] = [];
-    const numSections = 4;
-    const halfSize = Math.floor(matrixSize / 2);
-
-    const sections = [
-      { name: 'Top-Left', rowStart: 0, rowEnd: halfSize, colStart: 0, colEnd: halfSize },
-      { name: 'Top-Right', rowStart: 0, rowEnd: halfSize, colStart: halfSize, colEnd: matrixSize },
-      { name: 'Bottom-Left', rowStart: halfSize, rowEnd: matrixSize, colStart: 0, colEnd: halfSize },
-      { name: 'Bottom-Right', rowStart: halfSize, rowEnd: matrixSize, colStart: halfSize, colEnd: matrixSize }
-    ];
-
-    steps.push({
-      type: 'sections-init',
-      description: 'Creating parallel sections, each handled by different threads',
-      activeThreads: Array.from({ length: numSections }, (_, i) => i + 1),
-      processingCells: [],
-      timestamp: Date.now()
-    });
-
-    setExecutionSteps(steps);
-    setCurrentStep(0);
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Process all sections simultaneously
-    const allProcessingCells = [];
-    sections.forEach((section, sectionIndex) => {
-      for (let i = section.rowStart; i < section.rowEnd; i++) {
-        for (let j = section.colStart; j < section.colEnd; j++) {
-          allProcessingCells.push({ row: i, col: j, threadId: sectionIndex + 1 });
+          addLog(`✅ Thread ${threadId} completed ${task.position}`);
+          delete runningTasks[threadId];
         }
       }
-    });
 
-    steps.push({
-      type: 'sections-execution',
-      description: 'All sections processing simultaneously',
-      activeThreads: Array.from({ length: numSections }, (_, i) => i + 1),
-      processingCells: allProcessingCells,
-      timestamp: Date.now()
-    });
+      setTasks([...allTasks]);
+      await delay(speed / 4);
+    }
 
-    setExecutionSteps(steps);
-    setCurrentStep(1);
-
-    setMatrixC(prev => prev.map((row, rowIdx) =>
-      row.map((cell, colIdx) => {
-        const processing = allProcessingCells.find(p => p.row === rowIdx && p.col === colIdx);
-        if (processing) {
-          return {
-            ...cell,
-            status: 'processing',
-            value: matrixA[rowIdx][colIdx] + matrixB[rowIdx][colIdx],
-            threadId: processing.threadId
-          };
-        }
-        return cell;
-      })
-    ));
-
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    setMatrixC(prev => prev.map(row =>
-      row.map(cell => ({ ...cell, status: 'completed' }))
-    ));
+    const endTime = Date.now();
+    setExecutionTime(endTime - startTime);
+    addLog(`🏁 Element-based task parallelism completed in ${endTime - startTime}ms`);
+    addLog(`📊 All ${numThreads} threads participated in task execution (including task creator)`);
+    setIsRunning(false);
+    setCurrentDemo(null);
   };
 
-  const resetExample = () => {
+  const runRowBasedDemo = async () => {
+    setIsRunning(true);
+    setCurrentDemo('row-task');
+    const startTime = Date.now();
+    addLog('🚀 Starting Row-based Task Parallelism');
+    addLog(`📊 Thread 0 will create ${matrixSize} tasks (one per row)`);
+    addLog('🏗️ #pragma omp single - Thread 0 creating all row tasks...');
+
+    // Reset matrix C
+    setMatrixC(Array(matrixSize).fill(null).map(() =>
+      Array(matrixSize).fill(null).map(() => ({
+        value: 0,
+        status: 'idle' as const,
+        threadId: undefined,
+        taskId: undefined
+      }))
+    ));
+
+    // Initialize threads - Thread 0 starts as task creator
+    const newThreads: ThreadInfo[] = Array(numThreads).fill(null).map((_, i) => ({
+      id: i,
+      status: i === 0 ? 'creating-tasks' : 'idle',
+      tasksCompleted: 0,
+      color: threadColors[i % threadColors.length],
+      currentTask: i === 0 ? 'Creating row tasks' : undefined
+    }));
+    setThreads(newThreads);
+
+    // Phase 1: Thread 0 creates all row tasks
+    addLog('📝 Thread 0 in #pragma omp single region - creating row task pool...');
+    const rowTasks: TaskInfo[] = [];
+    
+    for (let i = 0; i < matrixSize; i++) {
+      rowTasks.push({
+        id: i,
+        type: 'row',
+        position: `Row ${i}`,
+        status: 'created',
+        executionTime: Math.random() * 500 + 300
+      });
+      
+      await delay(speed / 6);
+      addLog(`📋 Thread 0: Created task for Row ${i}`);
+    }
+    
+    setTasks(rowTasks);
+    addLog(`✅ Thread 0: All ${rowTasks.length} row tasks created and added to shared task pool`);
+    addLog('🚦 Task creation complete - all threads now participate in row processing');
+
+    // Phase 2: All threads (including Thread 0) now execute row tasks
+    setThreads(prev => prev.map(t => ({ ...t, status: 'idle', currentTask: undefined })));
+    await delay(speed / 2);
+
+    let completedTasks = 0;
+    const availableThreads = [...Array(numThreads).keys()];
+    const runningTasks: { [key: number]: { taskIndex: number; startTime: number } } = {};
+
+    while (completedTasks < rowTasks.length) {
+      // Assign row tasks to available threads (including Thread 0)
+      for (const threadId of availableThreads) {
+        if (!(threadId in runningTasks)) {
+          const nextTaskIndex = rowTasks.findIndex(task => task.status === 'created');
+          if (nextTaskIndex !== -1) {
+            const task = rowTasks[nextTaskIndex];
+            const rowIndex = task.id;
+            
+            task.status = 'assigned';
+            task.threadId = threadId;
+            runningTasks[threadId] = { taskIndex: nextTaskIndex, startTime: Date.now() };
+            
+            setThreads(prev => prev.map(t => 
+              t.id === threadId 
+                ? { ...t, status: 'working', currentTask: task.position }
+                : t
+            ));
+
+            setMatrixC(prev => prev.map((row, rowIdx) =>
+              rowIdx === rowIndex 
+                ? row.map(cell => ({ ...cell, status: 'assigned', threadId, taskId: task.id }))
+                : row
+            ));
+
+            addLog(`🎯 Thread ${threadId} grabbed ${task.position} from shared pool`);
+            setTasks([...rowTasks]);
+          }
+        }
+      }
+
+      await delay(speed / 2);
+
+      // Process assigned row tasks
+      for (const [threadIdStr, taskInfo] of Object.entries(runningTasks)) {
+        const threadId = parseInt(threadIdStr);
+        const task = rowTasks[taskInfo.taskIndex];
+        if (task.status === 'assigned') {
+          task.status = 'executing';
+          const rowIndex = task.id;
+          
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            rowIdx === rowIndex 
+              ? row.map((cell, colIdx) => ({ 
+                  ...cell, 
+                  status: 'processing',
+                  value: matrixA[rowIdx][colIdx] + matrixB[rowIdx][colIdx]
+                }))
+              : row
+          ));
+          
+          addLog(`⚡ Thread ${threadId} processing ${task.position} (${matrixSize} elements)`);
+          
+          // Show individual element computation
+          for (let j = 0; j < matrixSize; j++) {
+            await delay(speed / (matrixSize * 2));
+            addLog(`   Thread ${threadId}: C[${rowIndex}][${j}] = ${matrixA[rowIndex][j]} + ${matrixB[rowIndex][j]} = ${matrixA[rowIndex][j] + matrixB[rowIndex][j]}`);
+          }
+        }
+      }
+
+      await delay(speed);
+
+      // Complete row tasks
+      for (const [threadIdStr, taskInfo] of Object.entries(runningTasks)) {
+        const threadId = parseInt(threadIdStr);
+        if (Date.now() - taskInfo.startTime >= (rowTasks[taskInfo.taskIndex].executionTime! * speed / 1000)) {
+          const task = rowTasks[taskInfo.taskIndex];
+          const rowIndex = task.id;
+          
+          task.status = 'completed';
+          completedTasks++;
+          
+          setMatrixC(prev => prev.map((row, rowIdx) =>
+            rowIdx === rowIndex 
+              ? row.map(cell => ({ ...cell, status: 'completed' }))
+              : row
+          ));
+
+          setThreads(prev => prev.map(t => 
+            t.id === threadId 
+              ? { ...t, status: 'idle', currentTask: undefined, tasksCompleted: t.tasksCompleted + 1 }
+              : t
+          ));
+
+          addLog(`✅ Thread ${threadId} completed ${task.position}`);
+          delete runningTasks[threadId];
+        }
+      }
+
+      setTasks([...rowTasks]);
+      await delay(speed / 4);
+    }
+
+    const endTime = Date.now();
+    setExecutionTime(endTime - startTime);
+    addLog(`🏁 Row-based task parallelism completed in ${endTime - startTime}ms`);
+    addLog(`📊 All ${numThreads} threads participated in row processing (including task creator)`);
     setIsRunning(false);
-    initializeMatrices();
-    setPerformance({ time: 0, efficiency: 0 });
+    setCurrentDemo(null);
+  };
+
+  const reset = () => {
+    setIsRunning(false);
+    setCurrentDemo(null);
+    initializeData();
   };
 
   const renderMatrix = (matrix: number[][] | MatrixCell[][], title: string, isResult = false) => (
     <div className="flex flex-col items-center space-y-2">
-      <h4 className="font-semibold text-sm">{title}</h4>
+      <h4 className="font-semibold text-sm text-foreground">{title}</h4>
       <div 
         className="grid gap-1" 
         style={{ gridTemplateColumns: `repeat(${matrixSize}, 1fr)` }}
@@ -466,22 +687,33 @@ void matrix_add_sections(int A[N][N], int B[N][N], int C[N][N]) {
             const cellValue = typeof cell === 'number' ? cell : cell.value;
             const cellStatus = typeof cell === 'number' ? 'idle' : cell.status;
             const threadId = typeof cell === 'number' ? undefined : cell.threadId;
+            const threadColor = threadId !== undefined ? threadColors[threadId % threadColors.length] : undefined;
             
             return (
               <div
                 key={`${rowIdx}-${colIdx}`}
                 className={`
-                  w-8 h-8 border border-border flex items-center justify-center text-xs font-bold rounded transition-all duration-300
-                  ${cellStatus === 'idle' ? 'bg-secondary' : ''}
-                  ${cellStatus === 'processing' ? 'bg-task-running text-white scale-110 shadow-lg' : ''}
-                  ${cellStatus === 'completed' ? 'bg-task-completed text-white' : ''}
+                  w-10 h-10 border border-border flex items-center justify-center text-xs font-bold rounded transition-all duration-500
+                  ${cellStatus === 'idle' ? 'bg-muted text-muted-foreground' : ''}
+                  ${cellStatus === 'assigned' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}
+                  ${cellStatus === 'processing' ? 'bg-blue-100 text-blue-800 border-blue-300 scale-110 shadow-lg' : ''}
+                  ${cellStatus === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : ''}
                 `}
                 style={{
-                  backgroundColor: cellStatus === 'processing' && threadId ? 
-                    threadColors[threadId - 1] : undefined
+                  backgroundColor: cellStatus === 'processing' && threadColor ? `${threadColor}20` : undefined,
+                  borderColor: cellStatus === 'processing' && threadColor ? threadColor : undefined,
+                  color: cellStatus === 'processing' && threadColor ? threadColor : undefined
                 }}
               >
                 {cellValue}
+                {isResult && threadId !== undefined && (
+                  <div 
+                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full text-[8px] flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: threadColor }}
+                  >
+                    {threadId}
+                  </div>
+                )}
               </div>
             );
           })
@@ -491,24 +723,24 @@ void matrix_add_sections(int A[N][N], int B[N][N], int C[N][N]) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-gradient-to-br from-background via-muted/20 to-background p-6 rounded-lg">
       {/* Controls */}
-      <Card>
+      <Card className="bg-card/80 backdrop-blur-sm border-border/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Grid className="w-5 h-5" />
-            Matrix Addition - Different Parallelism Approaches
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Cpu className="w-5 h-5 text-primary" />
+            Matrix Addition Parallelism Methods
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-sm font-medium">Matrix Size</label>
+              <label className="text-sm font-medium text-foreground">Matrix Size</label>
               <Slider
                 value={[matrixSize]}
                 onValueChange={(value) => setMatrixSize(value[0])}
-                min={4}
-                max={8}
+                min={3}
+                max={6}
                 step={1}
                 disabled={isRunning}
                 className="mt-2"
@@ -516,201 +748,212 @@ void matrix_add_sections(int A[N][N], int B[N][N], int C[N][N]) {
               <span className="text-xs text-muted-foreground">{matrixSize}×{matrixSize}</span>
             </div>
             
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Parallelism Type</label>
-              <div className="grid grid-cols-4 gap-2 mt-2">
-                {[
-                  { key: 'serial', label: 'Serial', desc: 'Sequential execution' },
-                  { key: 'omp-for', label: 'OpenMP For', desc: 'Parallel loops' },
-                  { key: 'omp-tasks', label: 'OpenMP Tasks', desc: 'Task-based parallel' },
-                  { key: 'omp-sections', label: 'OpenMP Sections', desc: 'Section-based parallel' }
-                ].map((type) => (
-                  <Button
-                    key={type.key}
-                    variant={currentExample === type.key ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentExample(type.key as any)}
-                    disabled={isRunning}
-                    className="flex flex-col h-auto p-2"
-                  >
-                    <span className="text-xs font-semibold">{type.label}</span>
-                    <span className="text-xs opacity-70">{type.desc}</span>
-                  </Button>
-                ))}
-              </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Number of Threads</label>
+              <Slider
+                value={[numThreads]}
+                onValueChange={(value) => setNumThreads(value[0])}
+                min={2}
+                max={8}
+                step={1}
+                disabled={isRunning}
+                className="mt-2"
+              />
+              <span className="text-xs text-muted-foreground">{numThreads} threads</span>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground">Animation Speed</label>
+              <Slider
+                value={[speed]}
+                onValueChange={(value) => setSpeed(value[0])}
+                min={200}
+                max={2000}
+                step={100}
+                disabled={isRunning}
+                className="mt-2"
+              />
+              <span className="text-xs text-muted-foreground">{speed}ms delay</span>
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
-              onClick={runExample}
+              onClick={runSerialDemo}
               disabled={isRunning}
-              size="sm"
-            >
-              {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-              {isRunning ? 'Running' : 'Start Example'}
-            </Button>
-            <Button
-              onClick={resetExample}
               variant="outline"
               size="sm"
+              className="flex items-center gap-2"
             >
-              <RotateCcw className="w-4 h-4 mr-2" />
+              <Play className="w-4 h-4" />
+              Serial Execution
+            </Button>
+            <Button
+              onClick={runParallelForDemo}
+              disabled={isRunning}
+              variant="default"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Grid className="w-4 h-4" />
+              Parallel For Loops
+            </Button>
+            <Button
+              onClick={runSectionsDemo}
+              disabled={isRunning}
+              variant="default"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Layers className="w-4 h-4" />
+              Sections-based
+            </Button>
+            <Button
+              onClick={runElementBasedDemo}
+              disabled={isRunning}
+              variant="default"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Zap className="w-4 h-4" />
+              Element Tasks
+            </Button>
+            <Button
+              onClick={runRowBasedDemo}
+              disabled={isRunning}
+              variant="default"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Users className="w-4 h-4" />
+              Row Tasks
+            </Button>
+            <Button
+              onClick={reset}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
               Reset
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Visualization */}
-      <Tabs defaultValue="visualization" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="visualization">Live Visualization</TabsTrigger>
-          <TabsTrigger value="code">Code Example</TabsTrigger>
-          <TabsTrigger value="analysis">Performance Analysis</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="visualization" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Matrix Addition Visualization</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Watch how different parallelism approaches process the matrix addition
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap justify-center gap-8 mb-6">
-                {renderMatrix(matrixA, 'Matrix A')}
-                <div className="flex items-center">
-                  <span className="text-2xl font-bold text-primary">+</span>
+      {/* Thread Status */}
+      <Card className="bg-card/80 backdrop-blur-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Users className="w-5 h-5 text-primary" />
+            Thread Status Monitor
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {threads.map(thread => (
+              <div
+                key={thread.id}
+                className={`
+                  p-3 rounded-lg border transition-all duration-300
+                  ${thread.status === 'idle' ? 'bg-muted border-muted-foreground/20' : ''}
+                  ${thread.status === 'working' ? 'bg-blue-50 border-blue-200 shadow-md' : ''}
+                  ${thread.status === 'creating-tasks' ? 'bg-purple-50 border-purple-200 shadow-md' : ''}
+                `}
+                style={{
+                  backgroundColor: thread.status === 'working' ? `${thread.color}10` : 
+                                  thread.status === 'creating-tasks' ? `${thread.color}15` : undefined,
+                  borderColor: (thread.status === 'working' || thread.status === 'creating-tasks') ? thread.color : undefined
+                }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: thread.color }}
+                  />
+                  <span className="font-semibold text-sm text-foreground">Thread {thread.id}</span>
                 </div>
-                {renderMatrix(matrixB, 'Matrix B')}
-                <div className="flex items-center">
-                  <span className="text-2xl font-bold text-primary">=</span>
+                <div className="text-xs text-muted-foreground">
+                  Status: <Badge variant={
+                    thread.status === 'working' ? 'default' : 
+                    thread.status === 'creating-tasks' ? 'destructive' : 'secondary'
+                  } className="ml-1">
+                    {thread.status === 'creating-tasks' ? 'creating' : thread.status}
+                  </Badge>
                 </div>
-                {renderMatrix(matrixC, 'Result Matrix C', true)}
+                {thread.currentTask && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Task: {thread.currentTask}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-1">
+                  Completed: {thread.tasksCompleted}
+                </div>
               </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-              {/* Current Step Display */}
-              {executionSteps.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">Execution Progress</h4>
-                    <Badge>Step {currentStep + 1} of {executionSteps.length}</Badge>
-                  </div>
-                  <div className="p-3 bg-secondary rounded-lg">
-                    <p className="text-sm">{executionSteps[currentStep]?.description}</p>
-                    <div className="flex gap-2 mt-2">
-                      <span className="text-xs text-muted-foreground">Active Threads:</span>
-                      {executionSteps[currentStep]?.activeThreads.map(threadId => (
-                        <Badge key={threadId} variant="outline" className="text-xs">
-                          Thread {threadId}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+      {/* Matrix Visualization */}
+      <Card className="bg-card/80 backdrop-blur-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="text-foreground">Matrix Visualization</CardTitle>
+          {currentDemo && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary">
+                {currentDemo === 'element-task' ? 'Element-based Tasks' : 
+                 currentDemo === 'row-task' ? 'Row-based Tasks' : 
+                 currentDemo === 'serial' ? 'Serial Execution' :
+                 currentDemo === 'parallel-for' ? 'Parallel For Loop' :
+                 currentDemo === 'sections' ? 'Sections-based' : ''}
+              </Badge>
+              {executionTime > 0 && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {executionTime}ms
+                </Badge>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap justify-center gap-8">
+            {renderMatrix(matrixA, 'Matrix A')}
+            <div className="flex items-center">
+              <span className="text-2xl font-bold text-primary">+</span>
+            </div>
+            {renderMatrix(matrixB, 'Matrix B')}
+            <div className="flex items-center">
+              <span className="text-2xl font-bold text-primary">=</span>
+            </div>
+            {renderMatrix(matrixC, 'Result Matrix C', true)}
+          </div>
+        </CardContent>
+      </Card>
 
-        <TabsContent value="code" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Code className="w-5 h-5" />
-                {currentExample.toUpperCase()} Implementation
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-card border rounded-lg">
-                <div className="border-b p-3 bg-muted">
-                  <span className="text-sm font-medium">C Code with OpenMP</span>
+      {/* Execution Log */}
+      <Card className="bg-card/80 backdrop-blur-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Clock className="w-5 h-5 text-primary" />
+            Execution Log
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-muted/50 rounded-lg p-4 max-h-60 overflow-y-auto font-mono text-sm">
+            {executionLog.length === 0 ? (
+              <div className="text-muted-foreground italic">Click a demo button to see execution details...</div>
+            ) : (
+              executionLog.map((log, index) => (
+                <div key={index} className="text-foreground mb-1">
+                  {log}
                 </div>
-                <pre className="p-4 overflow-x-auto text-sm">
-                  <code>{getCodeExample(currentExample)}</code>
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="analysis" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart className="w-5 h-5" />
-                Performance Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="flex justify-between text-sm">
-                    <span>Execution Time</span>
-                    <span>{performance.time}ms</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-1">
-                    <div 
-                      className="performance-bar h-2 rounded-full"
-                      style={{ width: `${Math.min(100, performance.time / 50)}%` }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm">
-                    <span>Parallel Efficiency</span>
-                    <span>{performance.efficiency.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-1">
-                    <div 
-                      className="performance-bar h-2 rounded-full"
-                      style={{ width: `${performance.efficiency}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 space-y-2 text-sm">
-                <h4 className="font-semibold">Approach Characteristics:</h4>
-                {currentExample === 'serial' && (
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>• Single-threaded execution</li>
-                    <li>• Predictable, sequential processing</li>
-                    <li>• No parallelization overhead</li>
-                    <li>• Limited by single core performance</li>
-                  </ul>
-                )}
-                {currentExample === 'omp-for' && (
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>• Loop iterations distributed among threads</li>
-                    <li>• Static or dynamic scheduling</li>
-                    <li>• Good for regular, uniform workloads</li>
-                    <li>• Low overhead for large loops</li>
-                  </ul>
-                )}
-                {currentExample === 'omp-tasks' && (
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>• Dynamic task creation and scheduling</li>
-                    <li>• Work-stealing for load balancing</li>
-                    <li>• Flexible for irregular workloads</li>
-                    <li>• Higher overhead but better scalability</li>
-                  </ul>
-                )}
-                {currentExample === 'omp-sections' && (
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>• Predefined work sections</li>
-                    <li>• Static load distribution</li>
-                    <li>• Good for heterogeneous tasks</li>
-                    <li>• Limited scalability</li>
-                  </ul>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
