@@ -1,73 +1,95 @@
-# Welcome to your Lovable project
+# Parallel Computing Educational App – Matrix Addition Focus
 
-## Project info
+## 📌 Project Overview
+This is a **React-based educational application** designed to teach **parallel computing concepts** with a primary focus on **matrix addition**.  
+It demonstrates and visualizes various parallel programming techniques using **code examples**, **detailed explanations**, and **interactive visual components**.
 
-**URL**: https://lovable.dev/projects/71fc3e2a-5538-43fd-9599-aeb6c59f7f9c
+---
 
-## How can I edit this code?
+## 📂 Project Structure
 
-There are several ways of editing your application.
+### **Main Files**
+- **`App.tsx`, `main.tsx`, `index.css`, `App.css`**  
+  Standard React/Vite entry points and global styles.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/71fc3e2a-5538-43fd-9599-aeb6c59f7f9c) and start prompting.
+### **Components**
+- **`MatrixCodeAnalysis.tsx`** – Displays code examples for matrix addition:
+  - Serial implementation
+  - Parallel `for`
+  - Sections
+  - Element-based tasks
+  - Row-based tasks  
+  Includes performance analysis and explanations.
+- **`MatrixAdditionExamples.tsx`, `MatrixVisualization.tsx`** – Interactive demos and visualizations of matrix operations.
+- **`SerialVsParallelDemo.tsx`** – Compares serial vs parallel execution visually.
+- **`ConceptsExplainer.tsx`, `ParallelismFundamentals.tsx`, `InternalProcessVisualization.tsx`** – Explain concepts and visualize how parallelism works internally.
+- **`CodeExamples.tsx`** – Displays code snippets for different parallel approaches.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+### **UI**
+- Located in **`components/ui/`** – Contains reusable UI components (cards, tabs, buttons, etc.).
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### **Hooks**
+- **`hooks/`** – Custom React hooks, such as:
+  - Mobile device detection
+  - Toast notifications
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### **Utilities**
+- **`lib/utils.ts`** – Helper functions used across the application.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+### **Pages**
+- **`Index.tsx`** – Main landing page.
+- **`NotFound.tsx`** – 404 error page.
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+---
 
-**Edit a file directly in GitHub**
+## 🎯 What the App Does
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### **Educational Focus**
+- Teaches **parallel computing fundamentals** with real code examples.
+- Covers **OpenMP** and **task-based parallelism** in C/C++.
 
-**Use GitHub Codespaces**
+### **Code Analysis**
+- Side-by-side comparison of serial and parallel implementations.
+- Explanation of pros, cons, and best use cases for each method.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### **Visualization**
+- Interactive graphics showing:
+  - How data is split
+  - How tasks are executed
+  - Thread assignments
 
-## What technologies are used for this project?
+### **User Interface**
+- Clean, modern UI built with reusable components.
+- Tabbed views, syntax-highlighted code, and diagrams.
 
-This project is built with:
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🛠 Technologies Used
+- **React** (TypeScript)
+- **Vite** (Fast build & dev server)
+- **Lucide-react** (Icons)
+- **Custom UI library** (in `components/ui/`)
+- **OpenMP** (C/C++ examples for parallelism)
 
-## How can I deploy this project?
+---
 
-Simply open [Lovable](https://lovable.dev/projects/71fc3e2a-5538-43fd-9599-aeb6c59f7f9c) and click on Share -> Publish.
+## 📖 Summary
+This project serves as an **interactive, educational platform** for understanding **parallel computing**.  
+It explains and visualizes:
+- How matrix addition can be done in serial mode
+- How different parallelization strategies improve performance
+- How OpenMP task-based parallelism works internally
 
-## Can I connect a custom domain to my Lovable project?
+The combination of **code, visuals, and interactive demos** makes complex concepts easy to grasp for students and developers alike.
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
