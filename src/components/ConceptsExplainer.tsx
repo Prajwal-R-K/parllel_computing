@@ -142,27 +142,27 @@ const ConceptsExplainer: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Core Concepts */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Core Concepts</CardTitle>
+      <Card className="bg-card border-border">
+        <CardHeader className="bg-card">
+          <CardTitle className="text-foreground">Core Concepts</CardTitle>
           <p className="text-sm text-muted-foreground">
             Fundamental principles of OpenMP task-based parallelism
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-card">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {concepts.map((concept, index) => (
-              <div key={index} className="space-y-3">
+              <div key={index} className="space-y-3 p-4 rounded-lg bg-secondary border border-border">
                 <div className="flex items-center gap-3">
                   {concept.icon}
-                  <h3 className="font-semibold">{concept.title}</h3>
+                  <h3 className="font-semibold text-foreground">{concept.title}</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">{concept.description}</p>
-                <ul className="text-xs space-y-1">
+                <ul className="text-xs space-y-1 text-foreground">
                   {concept.details.map((detail, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <span className="w-1 h-1 bg-primary rounded-full mt-2 flex-shrink-0" />
-                      {detail}
+                      <span className="text-foreground">{detail}</span>
                     </li>
                   ))}
                 </ul>
@@ -180,20 +180,20 @@ const ConceptsExplainer: React.FC = () => {
       </Card>
 
       {/* Performance Factors */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Considerations</CardTitle>
+      <Card className="bg-card border-border">
+        <CardHeader className="bg-card">
+          <CardTitle className="text-foreground">Performance Considerations</CardTitle>
           <p className="text-sm text-muted-foreground">
             Factors that affect task-based parallel performance
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-card">
           <div className="space-y-4">
             {performanceFactors.map((factor, index) => (
-              <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+              <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-secondary border border-border">
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <h4 className="font-medium">{factor.factor}</h4>
+                    <h4 className="font-medium text-foreground">{factor.factor}</h4>
                     <Badge 
                       variant={factor.impact === 'High' ? 'destructive' : factor.impact === 'Medium' ? 'default' : 'secondary'}
                     >
@@ -213,17 +213,17 @@ const ConceptsExplainer: React.FC = () => {
 
       {/* Advantages vs Challenges */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
+        <Card className="bg-card border-border">
+          <CardHeader className="bg-card">
             <CardTitle className="text-primary">Advantages</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bg-card">
             <div className="space-y-4">
               {advantages.map((advantage, index) => (
-                <div key={index} className="flex items-start gap-3">
+                <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-secondary border border-border">
                   {advantage.icon}
                   <div>
-                    <h4 className="font-medium">{advantage.title}</h4>
+                    <h4 className="font-medium text-foreground">{advantage.title}</h4>
                     <p className="text-sm text-muted-foreground">{advantage.description}</p>
                   </div>
                 </div>
@@ -232,17 +232,17 @@ const ConceptsExplainer: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="bg-card border-border">
+          <CardHeader className="bg-card">
             <CardTitle className="text-destructive">Challenges</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bg-card">
             <div className="space-y-4">
               {challenges.map((challenge, index) => (
-                <div key={index} className="flex items-start gap-3">
+                <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-secondary border border-border">
                   {challenge.icon}
                   <div>
-                    <h4 className="font-medium">{challenge.title}</h4>
+                    <h4 className="font-medium text-foreground">{challenge.title}</h4>
                     <p className="text-sm text-muted-foreground">{challenge.description}</p>
                   </div>
                 </div>
